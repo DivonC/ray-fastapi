@@ -30,6 +30,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           # (Optional) this only caches pip wheels used to install pipenv itself
           cache: "pip"
+          cache-dependency-path: Pipfile.lock
 
       - name: Install Pipenv
         run: |
