@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ "3.11", "3.12" ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install Pipenv
+        run: |
+          python -m pip install --upgrade pip
+          pip install pipenv
+
+      # Cache Pipenv virtualenv based on Pipfile.lock hash
+      - name: Cache Pipenv venv
+        id: cache-venv
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/virtualenvs
+          key: pipenv-${{ runner.os }}-${{ hashFiles('Pipfile.lock') }}
+
+      - name: Sync deps from lockfile
+        run: |
+          pipenv --python ${{ matrix.python-version }}
+          pipenv sync --dev
+
+      - name: Run tests
+        run: pipenv run pytest -q
+
+      # Optional: flake8 or ruff (if you use it)
+      # - name: Lint (ruff)
+      #   run: |
+      #     pipenv run pip install ruff
+      #     pipenv run ruff check .
