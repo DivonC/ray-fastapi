@@ -13,6 +13,13 @@ jobs:
       matrix:
         python-version: [ "3.11", "3.12" ]
 
+    env:
+      # Cleaner CI logs; no spinner/emojis
+      PIPENV_NOSPIN: "1"
+      PIPENV_HIDE_EMOJIS: "1"
+      # NOTE: We do NOT set PIPENV_VENV_IN_PROJECT here because you’re testing multiple
+      # Python versions; a single .venv would collide. We cache Pipenv’s default venv dir instead.
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,6 +28,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          # (Optional) this only caches pip wheels used to install pipenv itself
           cache: "pip"
 
       - name: Install Pipenv
@@ -28,24 +36,29 @@ jobs:
           python -m pip install --upgrade pip
           pip install pipenv
 
-      # Cache Pipenv virtualenv based on Pipfile.lock hash
+      # Cache Pipenv virtualenvs (default location) keyed by Python + Pipfile.lock
       - name: Cache Pipenv venv
         id: cache-venv
         uses: actions/cache@v4
         with:
           path: ~/.local/share/virtualenvs
-          key: pipenv-${{ runner.os }}-${{ hashFiles('Pipfile.lock') }}
+          key: pipenv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('Pipfile.lock') }}
+          restore-keys: |
+            pipenv-${{ runner.os }}-py${{ matrix.python-version }}-
 
       - name: Sync deps from lockfile
+        shell: bash
         run: |
+          # Create/select venv for this Python version
           pipenv --python ${{ matrix.python-version }}
-          pipenv sync --dev
+          # Install from lock if present; else create it (fallback)
+          if [ -f Pipfile.lock ]; then
+            pipenv sync --dev
+          else
+            pipenv install --dev
+          fi
+          # Useful debug: show the venv path to verify cache usage
+          echo "Using venv: $(pipenv --venv)"
 
       - name: Run tests
         run: pipenv run pytest -q
-
-      # Optional: flake8 or ruff (if you use it)
-      # - name: Lint (ruff)
-      #   run: |
-      #     pipenv run pip install ruff
-      #     pipenv run ruff check .
